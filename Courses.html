@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campus Connect — Courses</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand"><span class="dot"></span>Campus Connect</div>
+    <nav class="navlinks">
+        <a class="nav" href="Home.html">Home</a>
+        <a class="nav" href="Dashboard.html">Dashboard</a>
+        <a class="nav" href="Courses.html">Courses</a>
+        <a class="nav">Attendance</a>
+        <a class="nav">Results</a>
+        <a class="nav" href="Login.html">Logout</a>
+    </nav>
+</div>
+
+<div class="page-head">
+    <h2 style="text-align:left;margin-left:0;">Explore Course Catalog</h2>
+    <p class="subtext" style="text-align:left;">Discover academic and professional courses loaded directly from our JSON data catalog. Search, filter by department, and enroll instantly.</p>
+    
+    <label class="sr-only" for="courseSearch">Search courses</label>
+    <input class="course-search" id="courseSearch" type="search" placeholder="Search by course title, department, or keyword…">
+
+    <div class="filter-pills" id="filterPills">
+        <button class="filter-pill active" type="button" data-dept="all">All Departments</button>
+        <button class="filter-pill" type="button" data-dept="Computer Science">Computer Science</button>
+        <button class="filter-pill" type="button" data-dept="Web Development">Web Development</button>
+        <button class="filter-pill" type="button" data-dept="Artificial Intelligence">AI & Machine Learning</button>
+        <button class="filter-pill" type="button" data-dept="Cybersecurity">Cybersecurity</button>
+        <button class="filter-pill" type="button" data-dept="Cloud Computing">Cloud & DevOps</button>
+        <button class="filter-pill" type="button" data-dept="Data Science">Data Science</button>
+        <button class="filter-pill" type="button" data-dept="Design & UI/UX">Design & UI/UX</button>
+    </div>
+
+    <p class="catalog-status" id="catalogStatus" role="status">Loading courses from JSON catalog…</p>
+</div>
+
+<div class="course-grid" id="courseGrid" aria-live="polite"></div>
+<div class="catalog-more">
+    <button id="loadMore" type="button" hidden>Load more courses</button>
+</div>
+
+<script src="app.js"></script>
+<script src="auth.js"></script>
+<script>
+let nextCourseStart = null;
+let catalogTotal = null;
+let isLoading = false;
+let currentDepartment = "all";
+
+function escapeHtml(value){
+    return String(value || "").replace(/[&<>"']/g, function(character){
+        return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character];
+    });
+}
+
+function renderCourses(){
+    const grid = document.getElementById("courseGrid");
+    const query = document.getElementById("courseSearch").value.trim().toLowerCase();
+    
+    const filtered = COURSES.filter(function(course){
+        const matchesQuery = !query || (
+            (course.name || "") + " " +
+            (course.description || "") + " " +
+            (course.department || "") + " " +
+            (course.instructor || "")
+        ).toLowerCase().includes(query);
+
+        const matchesDept = currentDepartment === "all" || (course.department === currentDepartment);
+
+        return matchesQuery && matchesDept;
+    });
+
+    grid.innerHTML = "";
+
+    if(filtered.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "catalog-empty";
+        empty.innerHTML = `
+            <h3>No courses found</h3>
+            <p style="margin:8px 0 0; color:var(--muted);">${query ? "No courses match “" + escapeHtml(query) + "”. Try another keyword or clear filters." : "No courses are currently available in this department."}</p>
+        `;
+        grid.appendChild(empty);
+    }
+
+    filtered.forEach(function(course){
+        const enrolled = isEnrolled(course.id);
+        const description = (course.description || "Comprehensive course curriculum designed for academic and industry readiness.").trim();
+        const card = document.createElement("article");
+        card.className = "course-card api-course-card";
+
+        card.innerHTML = `
+            <div class="course-image-wrap">
+                <img class="course-image" src="${escapeHtml(course.photoUrl || '')}" alt="${escapeHtml(course.name)}" loading="lazy" onerror="this.onerror=null;this.closest('.course-image-wrap').classList.add('fallback-mode');">
+                <div class="image-overlay-title">
+                    <span class="overlay-icon">🎓</span>
+                    <span class="overlay-name">${escapeHtml(course.name)}</span>
+                </div>
+            </div>
+
+            <div class="card-badges">
+                ${course.department ? `<span class="dept-badge">${escapeHtml(course.department)}</span>` : "<span></span>"}
+                <span class="level-badge">${escapeHtml((course.courseType || "Course").replace("v2.ondemand", "On demand"))}</span>
+            </div>
+
+            <h3 class="course-name" title="${escapeHtml(course.name)}">${escapeHtml(course.name)}</h3>
+
+            <div class="instructor-row">
+                <span class="instructor-icon">👨‍🏫</span>
+                <span class="instructor-text">Instructor: <strong>${escapeHtml(course.instructor || "Faculty Expert")}</strong></span>
+            </div>
+
+            <div class="course-meta">
+                ${course.duration ? `<span>⏱️ <strong>${escapeHtml(course.duration)}</strong></span>` : ""}
+                ${course.rating ? `<span>⭐ <strong>${escapeHtml(course.rating)}</strong></span>` : ""}
+                ${course.students ? `<span>👥 <strong>${escapeHtml(course.students)}</strong></span>` : ""}
+            </div>
+
+            <p class="course-description">${escapeHtml(description.length > 320 ? description.slice(0, 317) + "…" : description)}</p>
+
+            <div class="course-actions">
+                <button class="enroll-button ${enrolled ? "btn-enrolled" : ""}" type="button" data-course-id="${escapeHtml(course.id)}" data-course-name="${escapeHtml(course.name)}">
+                    ${enrolled ? "✓ Enrolled" : "Enroll"}
+                </button>
+                <a class="button-link" href="${escapeHtml(courseUrl(course))}" target="_blank" rel="noopener noreferrer">View Course</a>
+            </div>`;
+        grid.appendChild(card);
+    });
+
+    const enrolledCount = getEnrolledCourses().length;
+    document.getElementById("catalogStatus").textContent = query || currentDepartment !== "all"
+        ? "Showing " + filtered.length + " matching course" + (filtered.length === 1 ? "" : "s") + " from " + COURSES.length + " in catalog • " + enrolledCount + " enrolled."
+        : "Showing " + COURSES.length + (catalogTotal ? " of " + catalogTotal.toLocaleString() : "") + " courses loaded from JSON data catalog • " + enrolledCount + " enrolled.";
+
+    grid.querySelectorAll(".enroll-button").forEach(function(button){
+        button.addEventListener("click", function(){
+            const courseId = button.dataset.courseId;
+            const courseName = button.dataset.courseName;
+            const currentlyEnrolled = isEnrolled(courseId);
+
+            if(currentlyEnrolled){
+                // Toggle / inform
+                showToast("You are already enrolled in " + courseName, "info");
+            } else {
+                const added = enroll(courseId, courseName);
+                if(added){
+                    button.textContent = "✓ Enrolled";
+                    button.classList.add("btn-enrolled");
+                    const count = getEnrolledCourses().length;
+                    document.getElementById("catalogStatus").textContent = "Showing " + COURSES.length + " courses loaded from JSON data catalog • " + count + " enrolled.";
+                }
+            }
+        });
+    });
+}
+
+async function loadCourses(start){
+    if(isLoading){
+        return;
+    }
+    isLoading = true;
+    const button = document.getElementById("loadMore");
+    button.disabled = true;
+    button.textContent = "Loading…";
+    try{
+        const result = await fetchCourseCatalog(start);
+        nextCourseStart = result.next;
+        catalogTotal = result.total;
+        renderCourses();
+        button.hidden = !nextCourseStart;
+    }catch(error){
+        console.error("Could not load course catalog:", error);
+        const status = document.getElementById("catalogStatus");
+        status.textContent = COURSES.length
+            ? "Showing " + COURSES.length + " saved courses from JSON storage."
+            : "Courses could not be loaded. Check your connection and try again.";
+        if(!COURSES.length){
+            document.getElementById("courseGrid").innerHTML = '<button id="retryCourses" type="button">Retry loading courses</button>';
+            document.getElementById("retryCourses").addEventListener("click", function(){
+                loadCourses(0);
+            });
+        }
+        button.hidden = !nextCourseStart;
+    }finally{
+        isLoading = false;
+        button.disabled = false;
+        button.textContent = "Load more courses";
+    }
+}
+
+// Search input handler
+document.getElementById("courseSearch").addEventListener("input", renderCourses);
+
+// Department filter pills
+document.querySelectorAll(".filter-pill").forEach(function(pill){
+    pill.addEventListener("click", function(){
+        document.querySelectorAll(".filter-pill").forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        currentDepartment = pill.dataset.dept;
+        renderCourses();
+    });
+});
+
+document.getElementById("loadMore").addEventListener("click", function(){
+    if(nextCourseStart){
+        loadCourses(nextCourseStart);
+    }
+});
+
+// Render instantly if already cached, and fetch fresh catalog
+if(COURSES.length){
+    renderCourses();
+}
+loadCourses(0);
+</script>
+
+</body>
+</html>

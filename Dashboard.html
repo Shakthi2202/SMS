@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campus Connect — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand"><span class="dot"></span>Campus Connect</div>
+    <nav class="navlinks">
+        <a class="nav" href="Home.html">Home</a>
+        <a class="nav" href="Dashboard.html">Dashboard</a>
+        <a class="nav" href="Courses.html">Courses</a>
+        <a class="nav">Attendance</a>
+        <a class="nav">Results</a>
+        <a class="nav" href="Login.html">Logout</a>
+    </nav>
+</div>
+
+<div class="page-head" id="profile">
+    <h2 style="text-align:left;margin-left:0;">Academic Summary</h2>
+</div>
+
+<table>
+<tr>
+<th>Subject</th>
+<th>Attendance</th>
+<th>Marks</th>
+</tr>
+<tr>
+<td>Python</td>
+<td>90%</td>
+<td class="grade-good">88</td>
+</tr>
+<tr>
+<td>Java</td>
+<td>86%</td>
+<td class="grade-good">84</td>
+</tr>
+<tr>
+<td>DBMS</td>
+<td>93%</td>
+<td class="grade-good">91</td>
+</tr>
+</table>
+
+<div class="section">
+    <h2 style="text-align:left;margin-left:0;">Enrolled Courses</h2>
+</div>
+
+<ul id="courseList"></ul>
+
+<script src="app.js"></script>
+<script src="auth.js"></script>
+<script>
+
+function renderEnrolled(){
+    const courses = getEnrolledCourses();
+    const list = document.getElementById("courseList");
+    list.innerHTML = "";
+
+    if(courses.length === 0){
+        list.innerHTML = "<li>No courses enrolled yet — visit the Courses page to get started.</li>";
+        return;
+    }
+
+    courses.forEach(function(courseId){
+        const meta = COURSES.find(course => course.id === courseId);
+        const li = document.createElement("li");
+        const name = document.createElement("strong");
+        name.textContent = meta ? meta.name : courseId;
+        li.appendChild(name);
+        if(meta){
+            li.appendChild(document.createElement("br"));
+            if(meta.department){
+                const dept = document.createElement("span");
+                dept.className = "dept-badge";
+                dept.style.margin = "6px 8px 6px 0";
+                dept.textContent = meta.department;
+                li.appendChild(dept);
+            }
+            if(meta.instructor){
+                const inst = document.createElement("span");
+                inst.style.fontSize = "12.5px";
+                inst.style.color = "var(--muted)";
+                inst.style.marginRight = "10px";
+                inst.textContent = "• " + meta.instructor;
+                li.appendChild(inst);
+            }
+            li.appendChild(document.createElement("br"));
+            const link = document.createElement("a");
+            link.href = courseUrl(meta);
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = "View Course →";
+            link.style.display = "inline-block";
+            link.style.marginTop = "4px";
+            link.style.fontWeight = "600";
+            link.style.color = "var(--violet-deep)";
+            li.appendChild(link);
+        }else{
+            const note = document.createElement("div");
+            note.className = "course-note";
+            note.textContent = "Course details will appear once loaded.";
+            li.appendChild(note);
+        }
+        list.appendChild(li);
+    });
+}
+
+renderEnrolled();
+if(COURSES.length === 0){
+    fetchCourseCatalog(0).then(renderEnrolled).catch(function(error){
+        console.error("Could not load course details for the dashboard:", error);
+    });
+}
+</script>
+
+</body>
+</html>
